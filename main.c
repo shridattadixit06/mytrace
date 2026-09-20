@@ -36,24 +36,34 @@ int main()
     {
         printf("Parent: I am the tracer\n");
         printf("Parent PID: %d\n", getpid());
+
         int status;
 
-        waitpid(pid, &status, WUNTRACED);
-        if (WIFSTOPPED(status))
+        waitpid(pid, &status, 0);
+
+        while (1)
         {
-            printf(
-                "Child stopped by signal %d\n",
-                WSTOPSIG(status)
-            );
+            if (WIFEXITED(status))
+            {
+                printf("Child exited with status %d\n", WEXITSTATUS(status));
+                break;
+            }
+            if (WIFSIGNALED(status))
+            {
+                printf("Child killed by signal %d\n", WTERMSIG(status));
+                break;
+            }
+            if (WIFSTOPPED(status))
+            {
+                printf("Child stopped by signal %d\n", WSTOPSIG(status));
+                if (ptrace(PTRACE_CONT, pid, NULL, NULL) == -1)
+                {
+                    perror("ptrace");
+                    break;
+                }
+            }
+            waitpid(pid, &status, 0);
         }
-        if (WIFEXITED(status))
-        {
-            printf(
-                "Child exited with status %d\n",
-                WEXITSTATUS(status)
-            );
-        }
-        printf("Child finished\n");
     }
 
     return 0;
