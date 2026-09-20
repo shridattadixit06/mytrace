@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <stdlib.h>
+#include <sys/ptrace.h>
 
 int main()
 {
@@ -17,6 +18,12 @@ int main()
     {
         printf("Child: I am the tracee\n");
         printf("Child PID: %d\n", getpid());
+
+        if (ptrace(PTRACE_TRACEME, 0, NULL, NULL) == -1)
+        {
+            perror("ptrace");
+            return 1;
+        }
 
         execlp("ls", "ls", NULL);
 
