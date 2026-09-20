@@ -3,6 +3,7 @@
 #include <sys/wait.h>
 #include <stdlib.h>
 #include <sys/ptrace.h>
+#include <signal.h>
 
 int main()
 {
@@ -24,7 +25,7 @@ int main()
             perror("ptrace");
             return 1;
         }
-
+        raise(SIGSTOP);
         execlp("ls", "ls", NULL);
 
         perror("exec");
@@ -35,9 +36,23 @@ int main()
     {
         printf("Parent: I am the tracer\n");
         printf("Parent PID: %d\n", getpid());
+        int status;
 
-        waitpid(pid, NULL, 0);
-
+        waitpid(pid, &status, WUNTRACED);
+        if (WIFSTOPPED(status))
+        {
+            printf(
+                "Child stopped by signal %d\n",
+                WSTOPSIG(status)
+            );
+        }
+        if (WIFEXITED(status))
+        {
+            printf(
+                "Child exited with status %d\n",
+                WEXITSTATUS(status)
+            );
+        }
         printf("Child finished\n");
     }
 
