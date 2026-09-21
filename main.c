@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <sys/ptrace.h>
 #include <signal.h>
+#include <sys/user.h>
 
 int main()
 {
@@ -38,8 +39,14 @@ int main()
 
         int status;
         int in_syscall = 0;
-        waitpid(pid, &status, 0);
 
+        waitpid(pid, &status, 0);
+        struct user_regs_struct regs;
+        if(ptrace(PTRACE_SETOPTIONS, pid, NULL, PTRACE_O_TRACESYSGOOD)==-1)
+        {
+            perror("PTRACE_SETOPTIONS");
+            exit(EXIT_FAILURE);
+        }
         while (1)
         {
             if (WIFEXITED(status))
@@ -57,24 +64,23 @@ int main()
                 int sig = WSTOPSIG(status);
                 printf("Child stopped by signal %d\n", sig);
                 
-                if(ptrace(PTRACE_SETOPTIONS, pid, NULL, PTRACE_O_TRACESYSGOOD)==-1)
-                {
-                    perror("PTRACE_SETOPTIONS");
-                    break;
-                }
-
                 if(sig == (SIGTRAP | 0x80))
                 {
+                    if(ptrace(PTRACE_GETREGS, pid, NULL, &regs)==-1)
+                    {
+                        perror("PTRACE_GETREGS");
+                        break;
+                    }
                     if (in_syscall == 0)
                     {
                         printf("Syscall entry\n");
-
+                        printf("Syscall number  = %lld\n",regs.orig_rax);
                         in_syscall = 1;
                     }
                     else
                     {
                         printf("Syscall exit\n");
-
+                        printf("RAX = %lld\n",regs.rax);
                         in_syscall = 0;
                     }
                 }
