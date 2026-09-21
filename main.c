@@ -55,8 +55,21 @@ int main()
             }
             if (WIFSTOPPED(status))
             {
-                printf("Child stopped by signal %d\n", WSTOPSIG(status));
-                if (ptrace(PTRACE_CONT, pid, NULL, NULL) == -1)
+                int sig = WSTOPSIG(status);
+                printf("Child stopped by signal %d\n", sig);
+                
+                if(ptrace(PTRACE_SETOPTIONS, pid, NULL, PTRACE_O_TRACESYSGOOD)==-1)
+                {
+                    perror("PTRACE_SETOPTIONS");
+                    break;
+                }
+
+                if(sig == (SIGTRAP | 0x80))
+                {
+                    printf("This is a syscall stop\n");
+                }
+
+                if (ptrace(PTRACE_SYSCALL, pid, NULL, NULL) == -1)
                 {
                     perror("ptrace");
                     break;
