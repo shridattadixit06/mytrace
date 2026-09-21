@@ -19,7 +19,6 @@ int main()
     {
         printf("Child: I am the tracee\n");
         printf("Child PID: %d\n", getpid());
-
         if (ptrace(PTRACE_TRACEME, 0, NULL, NULL) == -1)
         {
             perror("ptrace");
@@ -38,7 +37,7 @@ int main()
         printf("Parent PID: %d\n", getpid());
 
         int status;
-
+        int in_syscall = 0;
         waitpid(pid, &status, 0);
 
         while (1)
@@ -66,9 +65,19 @@ int main()
 
                 if(sig == (SIGTRAP | 0x80))
                 {
-                    printf("This is a syscall stop\n");
-                }
+                    if (in_syscall == 0)
+                    {
+                        printf("Syscall entry\n");
 
+                        in_syscall = 1;
+                    }
+                    else
+                    {
+                        printf("Syscall exit\n");
+
+                        in_syscall = 0;
+                    }
+                }
                 if (ptrace(PTRACE_SYSCALL, pid, NULL, NULL) == -1)
                 {
                     perror("ptrace");
