@@ -6,6 +6,21 @@
 #include <signal.h>
 #include <sys/user.h>
 
+const char *get_syscall_name(long long number)
+{
+    switch (number)
+    {
+        case 0: return "read";
+        case 3: return "close";
+        case 5: return "fstat";
+        case 9: return "mmap";
+        case 12: return "brk";
+        case 21: return "access";
+        case 59: return "execve";
+        case 257: return "openat";
+        default: return "unknown";
+    }
+}
 int main()
 {
     pid_t pid = fork();
@@ -74,13 +89,13 @@ int main()
                     if (in_syscall == 0)
                     {
                         printf("Syscall entry\n");
-                        printf("Syscall number  = %lld\n",regs.orig_rax);
+                        printf("Syscall call  = %s\n", get_syscall_name(regs.orig_rax));
                         in_syscall = 1;
                     }
                     else
                     {
                         printf("Syscall exit\n");
-                        printf("RAX = %lld\n",regs.rax);
+                        printf("Return value = %lld\n", regs.rax);
                         in_syscall = 0;
                     }
                 }
