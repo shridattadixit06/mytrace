@@ -90,6 +90,9 @@ int main()
                     {
                         printf("Syscall entry\n");
                         printf("Syscall call  = %s\n", get_syscall_name(regs.orig_rax));
+                        printf("RDI = %lld\n", regs.rdi);
+                        printf("RSI = %lld\n", regs.rsi);
+                        printf("RDX = %lld\n", regs.rdx);
                         in_syscall = 1;
                     }
                     else
