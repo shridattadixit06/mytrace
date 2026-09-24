@@ -5,12 +5,20 @@
 #include <sys/ptrace.h>
 #include <signal.h>
 #include <sys/user.h>
+#include <string.h>
+#include <sys/uio.h>
+
+size_t min(size_t a, size_t b)
+{
+    return (a < b) ? a : b;
+}
 
 const char *get_syscall_name(long long number)
 {
     switch (number)
     {
         case 0: return "read";
+        case 1: return "write";
         case 3: return "close";
         case 5: return "fstat";
         case 9: return "mmap";
@@ -21,8 +29,32 @@ const char *get_syscall_name(long long number)
         default: return "unknown";
     }
 }
+ssize_t read_tracee_memory(
+    pid_t pid,
+    unsigned long address,
+    void *buffer,
+    size_t size
+    )
+{
+    memset(buffer, 0, size);
+    struct iovec local;
+    struct iovec remote;
+    local.iov_base = buffer;
+    local.iov_len = size;
+    remote.iov_base = (void *)address;
+    remote.iov_len = size;
+    return process_vm_readv(
+            pid,
+            &local,
+            1,
+            &remote,
+            1,
+            0
+    );
+} 
 int main()
 {
+    
     pid_t pid = fork();
 
     if (pid == -1)
@@ -42,7 +74,6 @@ int main()
         }
         raise(SIGSTOP);
         execlp("ls", "ls", NULL);
-
         perror("exec");
         return 1;
     }
@@ -90,9 +121,29 @@ int main()
                     {
                         printf("Syscall entry\n");
                         printf("Syscall call  = %s\n", get_syscall_name(regs.orig_rax));
-                        printf("RDI = %lld\n", regs.rdi);
-                        printf("RSI = %lld\n", regs.rsi);
-                        printf("RDX = %lld\n", regs.rdx);
+                        if(regs.orig_rax == 1)
+                        {
+                            char buffer[100];
+                            ssize_t bytes_read = read_tracee_memory(
+                                pid,
+                                regs.rsi,
+                                buffer,
+                                min(sizeof(buffer) - 1, regs.rdx)
+                            );
+                            if (bytes_read > 0)
+                            {
+                                buffer[bytes_read] = '\0';
+                                printf("Write syscall: %s\n", buffer);
+                            }
+                            else
+                            {
+                                perror("read_tracee_memory");
+                            }
+                        }
+                        else
+                        {
+                            printf("Syscall arguments: RDI = %lld, RSI = %lld, RDX = %lld\n", regs.rdi, regs.rsi, regs.rdx);
+                        }
                         in_syscall = 1;
                     }
                     else
