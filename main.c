@@ -7,6 +7,7 @@
 #include <sys/user.h>
 #include <string.h>
 #include <sys/uio.h>
+#include <fcntl.h>
 
 size_t min(size_t a, size_t b)
 {
@@ -51,6 +52,35 @@ ssize_t read_tracee_memory(
             1,
             0
     );
+}
+void print_open_flags(long flags)
+{
+    long access_mode = flags & O_ACCMODE;
+
+    if (access_mode == O_RDONLY)
+    {
+        printf("O_RDONLY");
+    }
+    else if (access_mode == O_WRONLY)
+    {
+        printf("O_WRONLY");
+    }
+    else if (access_mode == O_RDWR)
+    {
+        printf("O_RDWR");
+    }
+    if(flags & O_CREAT)
+    {
+        printf("O_CREAT");
+    }
+    if(flags & O_TRUNC)
+    {
+        printf("O_TRUNC");
+    }
+    if(flags & O_APPEND)
+    {
+        printf("O_APPEND");
+    }    
 } 
 int main()
 {
@@ -133,12 +163,36 @@ int main()
                             if (bytes_read > 0)
                             {
                                 buffer[bytes_read] = '\0';
-                                printf("Write syscall: %s\n", buffer);
+                                printf("Write syscall: %.*s\n", (int)bytes_read, buffer);
                             }
                             else
                             {
                                 perror("read_tracee_memory");
                             }
+                        }
+                        else if(regs.orig_rax ==257)
+                        {
+                            char path[256];
+                            ssize_t bytes_read = read_tracee_memory(
+                                pid,
+                                regs.rsi,
+                                path,
+                                sizeof(path)-1
+                            );
+                            int dirfd = (int)regs.rdi;
+                            printf("dirfd = %d\n", dirfd);
+                            printf("mode = %lld\n", regs.r10);
+                            if (bytes_read > 0)
+                            {
+                                path[bytes_read] = '\0';
+                                printf("Openat syscall: %.*s\n", (int)bytes_read, path);
+                            }
+                            else
+                            {
+                                perror("read_tracee_memory");
+                            }
+                            print_open_flags(regs.rdx);
+                            printf("\n");
                         }
                         else
                         {
