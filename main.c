@@ -137,9 +137,7 @@ int main()
             }
             if (WIFSTOPPED(status))
             {
-                int sig = WSTOPSIG(status);
-                printf("Child stopped by signal %d\n", sig);
-                
+                int sig = WSTOPSIG(status);                
                 if(sig == (SIGTRAP | 0x80))
                 {
                     if(ptrace(PTRACE_GETREGS, pid, NULL, &regs)==-1)
@@ -149,8 +147,8 @@ int main()
                     }
                     if (in_syscall == 0)
                     {
-                        printf("Syscall entry\n");
-                        printf("Syscall call  = %s\n", get_syscall_name(regs.orig_rax));
+                        printf("[SYSCALL ENTRY] ");
+                        printf("%s\n", get_syscall_name(regs.orig_rax));
                         if(regs.orig_rax == 1)
                         {
                             char buffer[100];
@@ -202,10 +200,19 @@ int main()
                     }
                     else
                     {
-                        printf("Syscall exit\n");
-                        printf("Return value = %lld\n", regs.rax);
+                        printf("[SYSCALL EXIT] ");
+                        printf(
+                            "%s -> %lld\n",
+                            get_syscall_name(regs.orig_rax),
+                            regs.rax
+                        );
+
                         in_syscall = 0;
                     }
+                }
+                else
+                {
+                    printf("Child stopped by signal %d\n", sig);
                 }
                 if (ptrace(PTRACE_SYSCALL, pid, NULL, NULL) == -1)
                 {
