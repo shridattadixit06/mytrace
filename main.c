@@ -103,7 +103,7 @@ int main()
             return 1;
         }
         raise(SIGSTOP);
-        execlp("ls", "ls", NULL);
+        execlp("cat", "cat", NULL);
         perror("exec");
         return 1;
     }
@@ -115,6 +115,9 @@ int main()
 
         int status;
         int in_syscall = 0;
+        unsigned long read_buffer = 0;
+        long read_count = 0;
+        int read_fd = 0;
 
         waitpid(pid, &status, 0);
         struct user_regs_struct regs;
@@ -192,6 +195,16 @@ int main()
                             print_open_flags(regs.rdx);
                             printf("\n");
                         }
+                        else if(regs.orig_rax == 0)
+                        {
+                            read_fd = regs.rdi;
+                            read_buffer = regs.rsi;
+                            read_count = regs.rdx;
+
+                            printf("read fd = %d\n", read_fd);
+                            printf("read buffer = 0x%lx\n", read_buffer);
+                            printf("read count = %ld\n", read_count);
+                        }
                         else
                         {
                             printf("Syscall arguments: RDI = %lld, RSI = %lld, RDX = %lld\n", regs.rdi, regs.rsi, regs.rdx);
@@ -206,6 +219,34 @@ int main()
                             get_syscall_name(regs.orig_rax),
                             regs.rax
                         );
+                        long bytes_read = regs.rax;
+                        if (regs.orig_rax == 0 && bytes_read > 0)
+                        {
+                            char buffer[100];
+
+                            size_t amount = min(
+                                sizeof(buffer) - 1,
+                                bytes_read
+                            );
+
+                            ssize_t copied = read_tracee_memory(
+                                pid,
+                                read_buffer,
+                                buffer,
+                                amount
+                            );
+
+                            if (copied > 0)
+                            {
+                                buffer[copied] = '\0';
+
+                                printf(
+                                    "Read data: %.*s\n",
+                                    (int)copied,
+                                    buffer
+                                );
+                            }
+                        }
 
                         in_syscall = 0;
                     }
