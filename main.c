@@ -30,6 +30,21 @@ const char *get_syscall_name(long long number)
         default: return "unknown";
     }
 }
+const char *get_signal_name(int signal)
+{
+    switch (signal)
+    {
+        case SIGINT:  return "SIGINT";
+        case SIGTERM: return "SIGTERM";
+        case SIGQUIT: return "SIGQUIT";
+        case SIGSEGV: return "SIGSEGV";
+        case SIGSTOP: return "SIGSTOP";
+        case SIGCONT: return "SIGCONT";
+        case SIGTSTP: return "SIGTSTP";
+        case SIGTRAP: return "SIGTRAP";
+        default:      return "UNKNOWN";
+    }
+}
 ssize_t read_tracee_memory(
     pid_t pid,
     unsigned long address,
@@ -103,7 +118,7 @@ int main()
             return 1;
         }
         raise(SIGSTOP);
-        execlp("cat", "cat", NULL);
+        execlp("sleep", "sleep","10",NULL);
         perror("exec");
         return 1;
     }
@@ -126,6 +141,7 @@ int main()
             perror("PTRACE_SETOPTIONS");
             exit(EXIT_FAILURE);
         }
+        int deliver_signal;
         while (1)
         {
             if (WIFEXITED(status))
@@ -143,6 +159,7 @@ int main()
                 int sig = WSTOPSIG(status);                
                 if(sig == (SIGTRAP | 0x80))
                 {
+                    deliver_signal = 0;
                     if(ptrace(PTRACE_GETREGS, pid, NULL, &regs)==-1)
                     {
                         perror("PTRACE_GETREGS");
@@ -253,9 +270,13 @@ int main()
                 }
                 else
                 {
-                    printf("Child stopped by signal %d\n", sig);
+                    printf("[SIGNAL STOP] %s (%d)\n", get_signal_name(sig),sig);
+                    if (sig == SIGTRAP)
+                        deliver_signal = 0;
+                    else
+                        deliver_signal = sig;
                 }
-                if (ptrace(PTRACE_SYSCALL, pid, NULL, NULL) == -1)
+                if (ptrace(PTRACE_SYSCALL, pid, NULL, deliver_signal) == -1)
                 {
                     perror("ptrace");
                     break;
