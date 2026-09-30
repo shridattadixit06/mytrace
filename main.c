@@ -13,23 +13,25 @@ size_t min(size_t a, size_t b)
 {
     return (a < b) ? a : b;
 }
-
-const char *get_syscall_name(long long number)
+struct syscall_info
 {
-    switch (number)
-    {
-        case 0: return "read";
-        case 1: return "write";
-        case 3: return "close";
-        case 5: return "fstat";
-        case 9: return "mmap";
-        case 12: return "brk";
-        case 21: return "access";
-        case 59: return "execve";
-        case 257: return "openat";
-        default: return "unknown";
-    }
-}
+    long number;
+    const char *name;
+    int arg_count;
+};
+
+struct syscall_info syscalls[] =
+{
+    {0,   "read",   3},
+    {1,   "write",  3},
+    {3,   "close",  1},
+    {5,   "fstat",  2},
+    {9,   "mmap",   6},
+    {12,  "brk",    1},
+    {21,  "access", 2},
+    {59,  "execve", 3},
+    {257, "openat", 4}
+};
 const char *get_signal_name(int signal)
 {
     switch (signal)
@@ -97,6 +99,36 @@ void print_open_flags(long flags)
         printf("O_APPEND");
     }    
 } 
+void print_syscall_args(struct user_regs_struct *regs, int count)
+{
+    unsigned long long args[] =
+    {
+        regs->rdi,
+        regs->rsi,
+        regs->rdx,
+        regs->r10,
+        regs->r8,
+        regs->r9
+    };
+    for(int i=0;i<count;++i)
+    {
+        printf("arg%d = %llu",i+1,args[i]);
+    }
+}
+struct syscall_info *get_syscall_info(long number)
+{
+    int count = sizeof(syscalls) / sizeof(syscalls[0]);
+
+    for(int i = 0; i < count; i++)
+    {
+        if(syscalls[i].number == number)
+        {
+            return &syscalls[i];
+        }
+    }
+
+    return NULL;
+}
 int main()
 {
     
@@ -168,7 +200,17 @@ int main()
                     if (in_syscall == 0)
                     {
                         printf("[SYSCALL ENTRY] ");
-                        printf("%s\n", get_syscall_name(regs.orig_rax));
+                        struct syscall_info *info;
+                        info = get_syscall_info(regs.orig_rax);
+
+                        if(info != NULL)
+                        {
+                            printf("%s\narg count = %d\n",info->name,info->arg_count);
+                        }
+                        else
+                        {
+                            printf("Unknown\n");
+                        }
                         if(regs.orig_rax == 1)
                         {
                             char buffer[100];
@@ -231,11 +273,23 @@ int main()
                     else
                     {
                         printf("[SYSCALL EXIT] ");
-                        printf(
-                            "%s -> %lld\n",
-                            get_syscall_name(regs.orig_rax),
-                            regs.rax
-                        );
+                        struct syscall_info *info = get_syscall_info(regs.orig_rax);
+
+                        if(info != NULL)
+                        {
+                            printf(
+                                "[SYSCALL EXIT] %s -> %lld\n",
+                                info->name,
+                                regs.rax
+                            );
+                        }
+                        else
+                        {
+                            printf(
+                                "[SYSCALL EXIT] unknown -> %lld\n",
+                                regs.rax
+                            );
+                        }
                         long bytes_read = regs.rax;
                         if (regs.orig_rax == 0 && bytes_read > 0)
                         {
