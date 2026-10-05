@@ -102,7 +102,7 @@ ssize_t read_tracee_memory(
             0
     );
 }
-void print_open_flags(long flags)
+void print_open_flags(unsigned long long flags)
 {
     long access_mode = flags & O_ACCMODE;
 
@@ -120,18 +120,18 @@ void print_open_flags(long flags)
     }
     if(flags & O_CREAT)
     {
-        printf("O_CREAT");
+        printf("| O_CREAT");
     }
     if(flags & O_TRUNC)
     {
-        printf("O_TRUNC");
+        printf("| O_TRUNC");
     }
     if(flags & O_APPEND)
     {
-        printf("O_APPEND");
+        printf("| O_APPEND");
     }    
 } 
-void print_syscall_args(struct user_regs_struct *regs, int count)
+void print_syscall_args(pid_t pid,struct user_regs_struct *regs, struct syscall_info *info)
 {
     unsigned long long args[] =
     {
@@ -142,9 +142,50 @@ void print_syscall_args(struct user_regs_struct *regs, int count)
         regs->r8,
         regs->r9
     };
-    for(int i=0;i<count;++i)
+    for(int i = 0; i < info->arg_count; i++)
     {
-        printf("arg%d = %llu\n",i+1,args[i]);
+        switch(info->arg_types[i])
+        {
+            case ARG_INT:
+                printf("arg%d = %lld\n",i + 1,(long long)args[i]);
+                break;
+
+            case ARG_POINTER:
+                printf("arg%d = 0x%llx\n", i + 1, args[i]);
+                break;
+        
+            case ARG_STRING:
+            {
+                char buffer[4096];
+
+                ssize_t bytes = read_tracee_memory(
+                    pid,
+                    args[i],
+                    buffer,
+                    sizeof(buffer) - 1
+                );
+
+                if(bytes < 0)
+                {
+                    printf("arg%d = <invalid string>\n", i + 1);
+                }
+                else
+                {
+                    buffer[bytes] = '\0';
+
+                    printf("arg%d = \"%s\"\n",
+                        i + 1,
+                        buffer);
+                }
+
+                break;
+            }
+            case ARG_FLAGS:
+                printf("arg%d=",i+1);
+                print_open_flags(args[i]);
+                printf("\n");
+                break;
+        }
     }
 }
 struct syscall_info *get_syscall_info(long number)
@@ -237,66 +278,11 @@ int main()
                         if(info != NULL)
                         {
                             printf("%s\narg count = %d\n",info->name,info->arg_count);
-                            print_syscall_args(&regs, info->arg_count);
+                            print_syscall_args(pid,&regs, info);
                         }
                         else
                         {
                             printf("[SYSCALL ENTRY] unknown\n");
-                        }
-                        if(regs.orig_rax == 1)
-                        {
-                            char buffer[100];
-                            ssize_t bytes_read = read_tracee_memory(
-                                pid,
-                                regs.rsi,
-                                buffer,
-                                min(sizeof(buffer) - 1, regs.rdx)
-                            );
-                            if (bytes_read > 0)
-                            {
-                                buffer[bytes_read] = '\0';
-                                printf("Write syscall: %.*s\n", (int)bytes_read, buffer);
-                            }
-                            else
-                            {
-                                perror("read_tracee_memory");
-                            }
-                        }
-                        else if(regs.orig_rax ==257)
-                        {
-                            char path[256];
-                            ssize_t bytes_read = read_tracee_memory(
-                                pid,
-                                regs.rsi,
-                                path,
-                                sizeof(path)-1
-                            );
-                            int dirfd = (int)regs.rdi;
-                            printf("dirfd = %d\n", dirfd);
-                            printf("mode = %lld\n", regs.r10);
-                            if (bytes_read > 0)
-                            {
-                                path[bytes_read] = '\0';
-                                printf("Openat syscall: %.*s\n", (int)bytes_read, path);
-                            }
-                            else
-                            {
-                                perror("read_tracee_memory");
-                            }
-                            print_open_flags(regs.rdx);
-                            printf("\n");
-                        }
-                        else if(regs.orig_rax == 0)
-                        {
-                            read_fd = regs.rdi;
-                            read_buffer = regs.rsi;
-
-                            printf("read fd = %d\n", read_fd);
-                            printf("read buffer = 0x%lx\n", read_buffer);
-                        }
-                        else
-                        {
-                            printf("Syscall arguments: RDI = %lld, RSI = %lld, RDX = %lld\n", regs.rdi, regs.rsi, regs.rdx);
                         }
                         in_syscall = 1;
                     }
