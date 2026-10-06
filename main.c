@@ -282,7 +282,13 @@ int main()
                         }
                         else
                         {
-                            printf("[SYSCALL ENTRY] unknown\n");
+                            printf("unknown\n");
+                        }
+                        if(regs.orig_rax == 0)
+                        {
+                            read_fd = regs.rdi;
+                            read_buffer = regs.rsi;
+                            int read_count = regs.rdx;
                         }
                         in_syscall = 1;
                     }
